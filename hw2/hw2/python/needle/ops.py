@@ -394,15 +394,56 @@ class LogSumExp(TensorOp):
         self.axes = axes
 
     def compute(self, Z):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        Z_max = array_api.max(Z, axis=self.axes, keepdims=False)
+        Z_max_broadcast = array_api.max(Z, axis=self.axes, keepdims=True)
+        ret =  Z_max + array_api.log(
+            array_api.sum(array_api.exp(Z - Z_max_broadcast), axis = self.axes)
+        )
+        return ret
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        ## grad = out_grad * (exp(Z-maxZ) / sum(exp(Z-maxZ)))
+        
+        Z = node.inputs[0].cached_data
+        Z_max_broadcast = array_api.amax(Z, axis = self.axes, keepdims = True)
+        exp_Z_maxZ = array_api.exp(Z - Z_max_broadcast)
+        sum_exp_Z_maxZ = array_api.sum(exp_Z_maxZ, axis = self.axes)
 
+        # First compute the grad for out * grad for log operator, because their
+        # dimension is same.
+        log_grad = out_grad.cached_data / sum_exp_Z_maxZ
+        # Make the log_grad's shape reshape to the input shape by add dimension.
+        if self.axes:
+            shape = [1] * len(Z.shape)
+            s = set(self.axes)
+            j = 0
+            for i in range(len(shape)):
+                if i not in s:
+                    shape[i] = node.shape[j]
+                    j += 1
+        else:
+            shape = list(array_api.ones(len(Z.shape), dtype=int))
+        log_grad_reshape = log_grad.reshape(tuple(shape))
+        return Tensor(log_grad_reshape * exp_Z_maxZ)
+        
 
 def logsumexp(a, axes=None):
     return LogSumExp(axes=axes)(a)
+
+
+class Max(TensorOp):
+    def __init__(self, axes: Optional[tuple] = None):
+        self.axes = axes
+    
+    def compute(self, a):
+        return array_api.max(a, axis = self.axes)
+    
+    def gradient(self, out_grad, node):
+        a = node.inputs[0]
+        a_max = array_api.zeros_like(a.data)
+        a_max[array_api.argmax(a, axis = self.axes, keepdims = True)] = 1
+        return out_grad * a_max
+
+
+def max(a, axes = None):
+    return Max(axes = axes)(a)

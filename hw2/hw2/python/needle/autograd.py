@@ -411,6 +411,9 @@ class Tensor(Value):
     def transpose(self, axes=None):
         return needle.ops.Transpose(axes)(self)
 
+    def max(slef, axes = None):
+        return needle.ops.Max(axes)(self)
+
     __radd__ = __add__
     __rmul__ = __mul__
     __rsub__ = __sub__
